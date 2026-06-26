@@ -1,0 +1,744 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+<meta charset="utf-8">
+<meta name="viewport" content="width=device-width, initial-scale=1.0, maximum-scale=1.0, user-scalable=no">
+<title>Zagreb Sun-Aligned Streets — any day of the year</title>
+<link rel="stylesheet" href="https://cdnjs.cloudflare.com/ajax/libs/leaflet/1.9.4/leaflet.min.css">
+<link rel="preconnect" href="https://fonts.googleapis.com">
+<link rel="preconnect" href="https://fonts.gstatic.com" crossorigin>
+<link href="https://fonts.googleapis.com/css2?family=IBM+Plex+Mono:wght@400;500;600&family=IBM+Plex+Sans:wght@400;500;600;700&display=swap" rel="stylesheet">
+<script src="https://cdnjs.cloudflare.com/ajax/libs/leaflet/1.9.4/leaflet.min.js"></script>
+<style>
+  :root{
+    --bg:#faf9f6; --panel:#ffffff; --line:#e7e4dd; --line2:#efece5;
+    --ink:#1b1a17; --mut:#6f6b62; --mut2:#9a958b;
+    --accent:#c2410c; --val:#1f6f8b;
+    --shadow:0 1px 2px rgba(20,18,12,.04),0 8px 28px rgba(20,18,12,.10);
+  }
+  *{box-sizing:border-box}
+  html,body{margin:0;height:100%}
+  body{font-family:"IBM Plex Sans",system-ui,sans-serif;color:var(--ink);background:var(--bg);overflow:hidden}
+  #map{position:absolute;inset:0;background:#f3f1ea}
+  .mono{font-family:"IBM Plex Mono",ui-monospace,monospace;font-variant-numeric:tabular-nums}
+
+  /* panel */
+  #panel{
+    position:absolute;z-index:1000;top:14px;left:14px;width:336px;max-width:calc(100vw - 28px);
+    background:var(--panel);border:1px solid var(--line);border-radius:14px;box-shadow:var(--shadow);
+    max-height:calc(100vh - 28px);display:flex;flex-direction:column;overflow:hidden;
+  }
+  .head{padding:14px 16px 10px;border-bottom:1px solid var(--line2)}
+  .title{font-weight:700;font-size:15px;letter-spacing:-.01em;display:flex;align-items:center;gap:8px}
+  .title .dot{width:9px;height:9px;border-radius:50%;background:var(--accent);box-shadow:0 0 0 4px rgba(194,65,12,.12)}
+  .sub{font-size:11.5px;color:var(--mut);margin-top:3px;line-height:1.45}
+  .body{padding:12px 16px 16px;overflow-y:auto}
+
+  .row{margin-top:14px}
+  .row:first-child{margin-top:4px}
+  label.lbl{display:flex;justify-content:space-between;align-items:baseline;font-size:11px;color:var(--mut);
+    text-transform:uppercase;letter-spacing:.06em;font-weight:600;margin-bottom:7px}
+  label.lbl .v{color:var(--ink);font-size:12px;text-transform:none;letter-spacing:0}
+
+  /* date */
+  .dateline{display:flex;gap:8px;align-items:center}
+  input[type=date]{flex:1;font-family:"IBM Plex Mono",monospace;font-size:13px;padding:7px 9px;border:1px solid var(--line);
+    border-radius:9px;background:#fff;color:var(--ink)}
+  .play{flex:0 0 auto;width:38px;height:34px;border:1px solid var(--line);border-radius:9px;background:#fff;cursor:pointer;
+    display:flex;align-items:center;justify-content:center;color:var(--ink)}
+  .play:hover{background:#faf7f1;border-color:#d9d5cc}
+  .play svg{width:15px;height:15px}
+
+  input[type=range]{-webkit-appearance:none;appearance:none;width:100%;height:4px;border-radius:3px;background:var(--line);outline:none;margin:2px 0}
+  input[type=range]::-webkit-slider-thumb{-webkit-appearance:none;width:17px;height:17px;border-radius:50%;background:#fff;
+    border:2px solid var(--accent);cursor:pointer;box-shadow:0 1px 3px rgba(0,0,0,.18)}
+  input[type=range]::-moz-range-thumb{width:17px;height:17px;border-radius:50%;background:#fff;border:2px solid var(--accent);cursor:pointer}
+  .ticks{display:flex;justify-content:space-between;font-size:9px;color:var(--mut2);margin-top:3px;font-family:"IBM Plex Mono",monospace}
+  .presets{display:flex;gap:6px;margin-top:9px}
+  .presets button{flex:1;border:1px solid var(--line);border-radius:8px;background:#fff;padding:6px 4px;font:inherit;font-size:11px;color:var(--mut);cursor:pointer}
+  .presets button:hover{background:#faf7f1}
+  .presets button.on{background:#fbf3ec;color:var(--accent);border-color:#ecd9c8;font-weight:600}
+  .callout{margin-top:12px;font-size:10.8px;line-height:1.5;color:#7a5a36;background:#fdf6ec;border:1px solid #f0e2cf;border-radius:9px;padding:9px 11px}
+  .callout b{color:#5e4427}
+  .srcbtns{display:flex;gap:6px;margin-top:8px}
+  .srcbtns button,.filebtn{flex:1;text-align:center;border:1px solid var(--line);border-radius:8px;background:#fff;padding:7px 6px;font:inherit;font-size:11.5px;color:var(--ink);cursor:pointer}
+  .srcbtns button:hover,.filebtn:hover{background:#faf7f1;border-color:#d9d5cc}
+  .err{color:#b42318;font-size:11.5px;margin-top:10px;display:none;line-height:1.5;background:#fdf3f1;border:1px solid #f0c4bd;border-radius:9px;padding:10px 11px}
+
+  /* segmented */
+  .seg{display:flex;border:1px solid var(--line);border-radius:9px;overflow:hidden}
+  .seg button{flex:1;border:0;background:#fff;padding:7px 4px;font:inherit;font-size:12px;color:var(--mut);cursor:pointer;border-right:1px solid var(--line2)}
+  .seg button:last-child{border-right:0}
+  .seg button.on{background:#fbf3ec;color:var(--accent);font-weight:600}
+
+  /* compass */
+  .compass-wrap{display:flex;gap:12px;align-items:center;margin-top:14px;padding:12px;border:1px solid var(--line2);border-radius:11px;background:#fdfcf9}
+  #compass{flex:0 0 auto}
+  .readout{flex:1;min-width:0}
+  .ro{display:flex;justify-content:space-between;align-items:baseline;font-size:12px;padding:2px 0}
+  .ro .k{color:var(--mut);display:flex;align-items:center;gap:6px}
+  .ro .k i{width:8px;height:8px;border-radius:2px;display:inline-block}
+  .ro .v{font-family:"IBM Plex Mono",monospace;font-weight:500}
+  .count{margin-top:6px;font-size:12px;color:var(--mut)}
+  .count b{color:var(--ink);font-family:"IBM Plex Mono",monospace}
+
+  /* legend */
+  .legend{margin-top:6px}
+  .ramp{height:9px;border-radius:5px;background:linear-gradient(90deg,#d7263d,#f0521f,#f6911f,#f3cf4e)}
+  .ramp-lbl{display:flex;justify-content:space-between;font-size:9.5px;color:var(--mut2);margin-top:3px;font-family:"IBM Plex Mono",monospace}
+
+  .check{display:flex;align-items:center;gap:8px;font-size:12px;color:var(--ink);cursor:pointer;padding:3px 0}
+  .check input{accent-color:var(--accent);width:15px;height:15px}
+  .types{display:grid;grid-template-columns:1fr 1fr;gap:1px 12px}
+
+  .note{font-size:10.5px;color:var(--mut2);line-height:1.5;margin-top:12px;border-top:1px solid var(--line2);padding-top:10px}
+  .note a{color:var(--accent);text-decoration:none}
+  .err button{margin-top:6px;font:inherit;font-size:11px;padding:4px 9px;border:1px solid #f0c4bd;background:#fff;color:#b42318;border-radius:7px;cursor:pointer}
+  .status{font-size:11px;color:var(--mut);margin-top:8px;display:none}
+
+  #loading #loadtxt{white-space:pre-line;line-height:1.4}
+
+  /* loading */
+  #loading{position:absolute;z-index:1200;left:50%;top:50%;transform:translate(-50%,-50%);
+    background:#fff;border:1px solid var(--line);border-radius:12px;box-shadow:var(--shadow);
+    padding:16px 20px;font-size:13px;color:var(--ink);display:flex;align-items:center;gap:12px}
+  .spin{width:16px;height:16px;border:2px solid var(--line);border-top-color:var(--accent);border-radius:50%;animation:sp .8s linear infinite}
+  @keyframes sp{to{transform:rotate(360deg)}}
+
+  .leaflet-container{font-family:"IBM Plex Sans",sans-serif}
+  .leaflet-popup-content-wrapper{border-radius:10px}
+  .tipname{font-weight:600;font-size:13px}
+  .tipmeta{font-family:"IBM Plex Mono",monospace;font-size:11.5px;color:var(--mut);margin-top:3px;line-height:1.6}
+  .tipmeta b{color:var(--ink)}
+
+  /* collapse on small screens */
+  #collapse{display:none}
+  @media (max-width:560px){
+    #panel{top:8px;left:8px;right:8px;width:auto}
+    .head{cursor:pointer}
+    #collapse{display:block;position:absolute;right:12px;top:13px;color:var(--mut);font-size:18px;line-height:1}
+    #panel.min .body{display:none}
+  }
+  @media (prefers-reduced-motion:reduce){.spin{animation:none}}
+</style>
+</head>
+<body>
+<div id="map"></div>
+
+<div id="loading"><div class="spin"></div><span id="loadtxt">Loading Zagreb street network…</span></div>
+
+<div id="panel">
+  <div class="head" id="head">
+    <div class="title"><span class="dot"></span> Heliotropic Streets · <span id="areaName">Zagreb</span></div>
+    <div class="sub">Streets that line up with sunrise or sunset on any chosen day. Pan/zoom the map to any city and press <b>Load streets in view</b>.</div>
+    <span id="collapse">–</span>
+  </div>
+  <div class="body" id="bodyPanel">
+
+    <div class="row">
+      <label class="lbl">Day <span class="v mono" id="dateLabel">—</span></label>
+      <div class="dateline">
+        <input type="date" id="date">
+        <button class="play" id="play" title="Animate through the year" aria-label="Animate through the year">
+          <svg viewBox="0 0 24 24" fill="currentColor"><path d="M8 5v14l11-7z"/></svg>
+        </button>
+      </div>
+      <input type="range" id="doy" min="1" max="365" value="355" style="margin-top:10px">
+      <div class="ticks"><span>Jan</span><span>Mar</span><span>May</span><span>Jul</span><span>Sep</span><span>Nov</span></div>
+      <div class="presets">
+        <button data-d="12-21" class="on">Dec solstice · ref</button>
+        <button data-d="03-20">Equinox</button>
+        <button data-d="06-21">Jun solstice</button>
+      </div>
+    </div>
+
+    <div class="row">
+      <label class="lbl">Alignment</label>
+      <div class="seg" id="mode">
+        <button data-m="both" class="on">Both</button>
+        <button data-m="rise">Sunrise</button>
+        <button data-m="set">Sunset</button>
+      </div>
+    </div>
+
+    <div class="compass-wrap">
+      <svg id="compass" width="96" height="96" viewBox="0 0 96 96"></svg>
+      <div class="readout">
+        <div class="ro"><span class="k"><i style="background:#e0892a"></i>Sunrise</span><span class="v" id="roRise">—</span></div>
+        <div class="ro"><span class="k"><i style="background:#9a4fb0"></i>Sunset</span><span class="v" id="roSet">—</span></div>
+        <div class="ro"><span class="k"><i style="background:#e9c98f"></i>Targets</span><span class="v" id="roTargets">—</span></div>
+        <div class="count">Aligned segments: <b id="roCount">—</b></div>
+      </div>
+    </div>
+
+    <div class="row">
+      <label class="lbl">Tolerance <span class="v mono" id="thrLabel">±3.0°</span></label>
+      <input type="range" id="thr" min="0.5" max="8" step="0.1" value="3">
+    </div>
+
+    <div class="row">
+      <label class="lbl">Min segment length <span class="v mono" id="lenLabel">100 m</span></label>
+      <input type="range" id="len" min="0" max="500" step="10" value="100">
+    </div>
+
+    <div class="row legend">
+      <label class="lbl">Closeness to perfect alignment</label>
+      <div class="ramp"></div>
+      <div class="ramp-lbl"><span>0.0° exact</span><span id="rampMax">±3.0°</span></div>
+    </div>
+
+    <div class="row">
+      <label class="lbl">Data source</label>
+      <label class="check"><input type="checkbox" id="incPaths"> Main roads only <span style="color:var(--mut2)">(faster; drops paths/service)</span></label>
+      <div class="srcbtns">
+        <button id="reloadBtn">↻ Load streets in view</button>
+        <label class="filebtn">Load file…<input type="file" id="fileIn" accept=".json,.geojson,application/json" hidden></label>
+      </div>
+      <div style="font-size:10px;color:var(--mut2);margin-top:5px;line-height:1.45">Pan/zoom to any city, then “Load streets in view”. For large areas tick “Main roads only”. Best run from a hosted URL (e.g. GitHub Pages) — live fetching is blocked when opening the file directly on a phone.</div>
+    </div>
+
+    <div class="row">
+      <label class="lbl">Street types</label>
+      <div class="types" id="types"></div>
+    </div>
+
+    <div class="row">
+      <label class="check"><input type="checkbox" id="showVal"> Show Zagreb solstice reference</label>
+      <div style="font-size:10.5px;color:var(--mut2);margin-left:23px;margin-top:-1px">207 segments from sztanko's original Zagreb map, computed for <b>21 Dec</b> (Zagreb only). On Dec solstice at ±3° your highlights should sit on top of these.</div>
+    </div>
+
+    <div class="callout" id="callout">
+      <b>Why 21 Jun ≠ 21 Dec.</b> The original map only used the December solstice. Horizon refraction makes the two solstices' folded orientations differ by ~2°, so on 21 Jun many of his streets (e.g. around Jarun) sit just outside ±3° and need ~3.7°. 137/207 align on both solstices; 67 are December-only.
+    </div>
+
+    <div class="err" id="err"></div>
+    <div class="status" id="status"></div>
+
+    <div class="note">
+      Sun azimuths via an embedded solar-position routine (USNO low-precision), reproducing the original <a href="https://sztanko.github.io/solsticestreets/" target="_blank" rel="noopener">solsticestreets</a> pyephem values to ~0.1°. Street data © OpenStreetMap contributors, fetched live via Overpass.
+    </div>
+  </div>
+</div>
+
+<script>
+/* ============================ embedded solstice reference ============================ */
+const VALIDATION = [{"c":[[15.91689,45.804169],[15.915098,45.804926]],"s":121.21,"d":2.476,"n":"Medarska ulica","t":"residential"},{"c":[[15.935563,45.755256],[15.936867,45.754699]],"s":121.48,"d":2.199,"n":"Ulica Ivice Kičmanovića","t":"residential"},{"c":[[15.93725,45.755156],[15.938398,45.754666]],"s":121.39,"d":2.289,"n":"Ulica Šegrta Hlapića","t":"residential"},{"c":[[15.966753,45.757479],[15.969424,45.756314]],"s":122.02,"d":1.661,"n":"Kralji","t":"residential"},{"c":[[15.934956,45.754844],[15.936469,45.754215]],"s":120.79,"d":2.895,"n":"Ulica Pere Kvržice","t":"residential"},{"c":[[15.95376,45.77205],[15.955352,45.771291]],"s":124.35,"d":0.664,"n":"Savski gaj IX.","t":"residential"},{"c":[[15.954526,45.772136],[15.95574,45.771596]],"s":122.54,"d":1.143,"n":"Iški put","t":"residential"},{"c":[[15.954193,45.772556],[15.952701,45.773181]],"s":120.97,"d":2.712,"n":"Savski gaj VIII.","t":"residential"},{"c":[[15.953011,45.771343],[15.954551,45.770545]],"s":126.62,"d":2.937,"n":"Savski gaj XI.","t":"residential"},{"c":[[15.953374,45.771659],[15.954949,45.770877]],"s":125.46,"d":1.772,"n":"Savski gaj X.","t":"residential"},{"c":[[16.07638,45.833012],[16.075134,45.833563]],"s":122.41,"d":1.273,"n":"Visočička ulica","t":"residential"},{"c":[[16.075998,45.832577],[16.074655,45.833179]],"s":122.77,"d":0.914,"n":"Prominska ulica","t":"residential"},{"c":[[16.070718,45.836474],[16.071849,45.836001]],"s":120.97,"d":2.712,"n":"Puklavčeva ulica","t":"residential"},{"c":[[16.071072,45.836887],[16.072179,45.836419]],"s":121.21,"d":2.473,"n":"Trutina ulica","t":"residential"},{"c":[[16.067879,45.834296],[16.069166,45.833638]],"s":126.28,"d":2.594,"n":"Redovka","t":"residential"},{"c":[[16.039261,45.760218],[16.038141,45.760739]],"s":123.7,"d":0.016,"n":"","t":"unclassified"},{"c":[[16.028259,45.787734],[16.029359,45.787174]],"s":126.11,"d":2.426,"n":"Savica I.","t":"service"},{"c":[[15.918093,45.783202],[15.919777,45.782422]],"s":123.58,"d":0.101,"n":"","t":"service"},{"c":[[15.989142,45.748615],[15.99036,45.748085]],"s":121.96,"d":1.662,"n":"Ulica Mladosti","t":"unclassified"},{"c":[[15.932605,45.75336],[15.931433,45.753851]],"s":120.95,"d":2.73,"n":"Ulica Filipa Latinovicza","t":"residential"},{"c":[[15.925244,45.760674],[15.926486,45.761198]],"s":58.86,"d":2.544,"n":"Rastočka ulica","t":"residential"},{"c":[[15.920728,45.762006],[15.919361,45.762575]],"s":120.85,"d":2.837,"n":"Sućova ulica","t":"residential"},{"c":[[16.016154,45.839639],[16.01724,45.839104]],"s":125.25,"d":1.569,"n":"IV. Požarinje","t":"residential"},{"c":[[16.019847,45.840498],[16.022541,45.839287]],"s":122.83,"d":0.858,"n":"Vrteci","t":"residential"},{"c":[[15.993233,45.830888],[15.992061,45.830399]],"s":59.13,"d":2.815,"n":"Smrekovac","t":"residential"},{"c":[[15.925813,45.761691],[15.924615,45.761184]],"s":58.76,"d":2.44,"n":"Rastočka ulica","t":"residential"},{"c":[[15.920473,45.785756],[15.919345,45.786264]],"s":122.87,"d":0.816,"n":"","t":"service"},{"c":[[16.021503,45.786304],[16.020228,45.785753]],"s":58.22,"d":1.905,"n":"Kuševačka ulica","t":"residential"},{"c":[[16.020228,45.785753],[16.019016,45.785241]],"s":58.82,"d":2.502,"n":"Kuševačka ulica","t":"residential"},{"c":[[15.90066,45.766676],[15.898788,45.767649]],"s":126.68,"d":2.996,"n":"","t":"path"},{"c":[[15.859017,45.794504],[15.857906,45.794032]],"s":58.63,"d":2.315,"n":"","t":"path"},{"c":[[15.8472,45.82709],[15.84585,45.827723]],"s":123.96,"d":0.276,"n":"Domska ulica","t":"residential"},{"c":[[16.059084,45.774725],[16.060471,45.774024]],"s":125.92,"d":2.238,"n":"I. Petruševec I. odvojak","t":"residential"},{"c":[[16.059529,45.77401],[16.062031,45.772711]],"s":126.65,"d":2.969,"n":"I. Petruševec II. odvojak","t":"residential"},{"c":[[16.038089,45.783722],[16.037026,45.784261]],"s":126.03,"d":2.35,"n":"Črnkovečka ulica","t":"unclassified"},{"c":[[16.037026,45.784261],[16.035709,45.784934]],"s":126.21,"d":2.528,"n":"Črnkovečka ulica","t":"unclassified"},{"c":[[16.034522,45.785499],[16.033359,45.786058]],"s":124.57,"d":0.884,"n":"Črnkovečka ulica","t":"unclassified"},{"c":[[16.031183,45.787174],[16.029967,45.787779]],"s":125.48,"d":1.793,"n":"Črnovečka ulica","t":"unclassified"},{"c":[[16.029967,45.787779],[16.028543,45.788493]],"s":125.74,"d":2.061,"n":"Črnovečka ulica","t":"unclassified"},{"c":[[16.019278,45.792433],[16.020477,45.793]],"s":55.87,"d":0.447,"n":"","t":"service"},{"c":[[16.03646,45.787326],[16.037625,45.786732]],"s":126.15,"d":2.471,"n":"","t":"service"},{"c":[[16.037625,45.786732],[16.038823,45.786115]],"s":126.47,"d":2.789,"n":"","t":"service"},{"c":[[16.041018,45.790265],[16.042306,45.789597]],"s":126.66,"d":2.976,"n":"","t":"service"},{"c":[[16.042237,45.787481],[16.041086,45.788078]],"s":126.68,"d":2.992,"n":"","t":"service"},{"c":[[16.040692,45.787723],[16.041873,45.78713]],"s":125.74,"d":2.059,"n":"","t":"service"},{"c":[[16.054956,45.779536],[16.053329,45.780349]],"s":125.65,"d":1.965,"n":"","t":"service"},{"c":[[16.082597,45.785035],[16.080988,45.784219]],"s":53.99,"d":2.331,"n":"","t":"service"},{"c":[[16.076096,45.835905],[16.074972,45.83639]],"s":121.77,"d":1.909,"n":"Ulica Anđela Nuića","t":"residential"},{"c":[[16.04803,45.840042],[16.046642,45.839442]],"s":58.18,"d":1.863,"n":"Ljutomerski odvojak I.","t":"residential"},{"c":[[16.005254,45.785287],[16.006585,45.784667]],"s":123.7,"d":0.018,"n":"Miševečka ulica","t":"tertiary"},{"c":[[15.892593,45.771513],[15.891299,45.77206]],"s":121.18,"d":2.499,"n":"","t":"residential"},{"c":[[15.932154,45.754701],[15.933309,45.754219]],"s":120.88,"d":2.8,"n":"Botinečki kuti","t":"residential"},{"c":[[15.931785,45.754275],[15.932952,45.753786]],"s":120.99,"d":2.692,"n":"Botinečke dužice","t":"residential"},{"c":[[16.013064,45.848731],[16.011773,45.848174]],"s":58.24,"d":1.926,"n":"Jazbinski odvojak VIII.","t":"residential"},{"c":[[16.041916,45.845763],[16.043135,45.846342]],"s":55.69,"d":0.631,"n":"","t":"service"},{"c":[[16.04188,45.847021],[16.042978,45.847513]],"s":57.26,"d":0.946,"n":"","t":"service"},{"c":[[16.046857,45.842313],[16.048042,45.842923]],"s":53.55,"d":2.77,"n":"Celovečki odvojak V.","t":"residential"},{"c":[[15.890624,45.751527],[15.889411,45.752124]],"s":125.21,"d":1.527,"n":"Travarsko","t":"residential"},{"c":[[15.887331,45.747332],[15.88525,45.748202]],"s":120.93,"d":2.691,"n":"Povrtlarska ulica","t":"residential"},{"c":[[15.890845,45.747115],[15.888221,45.748201]],"s":120.66,"d":2.957,"n":"Potočna ulica","t":"residential"},{"c":[[16.042664,45.847818],[16.041412,45.847224]],"s":55.72,"d":0.6,"n":"","t":"service"},{"c":[[16.04227,45.848097],[16.040883,45.847452]],"s":56.29,"d":0.031,"n":"","t":"service"},{"c":[[15.947356,45.774017],[15.94602,45.773426]],"s":57.61,"d":1.296,"n":"Lanište","t":"residential"},{"c":[[15.943446,45.774],[15.945051,45.774697]],"s":58.1,"d":1.782,"n":"Jadranska avenija","t":"secondary"},{"c":[[15.942899,45.773902],[15.940107,45.772683]],"s":57.96,"d":1.646,"n":"Jadranska avenija","t":"secondary"},{"c":[[15.833736,45.765223],[15.835069,45.765892]],"s":54.3,"d":2.021,"n":"Farkači","t":"residential"},{"c":[[16.004129,45.78219],[16.002957,45.782796]],"s":126.56,"d":2.876,"n":"","t":"service"},{"c":[[15.962281,45.803178],[15.960791,45.802469]],"s":55.67,"d":0.642,"n":"Tratinska ulica","t":"tertiary"},{"c":[[15.940107,45.772683],[15.938777,45.772085]],"s":57.18,"d":0.866,"n":"Jadranska avenija","t":"secondary"},{"c":[[15.937826,45.771671],[15.936405,45.771055]],"s":58.14,"d":1.823,"n":"Jadranska avenija","t":"secondary"},{"c":[[16.102366,45.857783],[16.101054,45.858352]],"s":121.92,"d":1.827,"n":"Dobrodolska cesta","t":"tertiary"},{"c":[[15.947032,45.880813],[15.948144,45.880331]],"s":121.91,"d":1.839,"n":"","t":"path"},{"c":[[15.908167,45.837851],[15.909298,45.838383]],"s":56.01,"d":0.308,"n":"Kukoljina ulica","t":"residential"},{"c":[[16.07137,45.837348],[16.072547,45.836837]],"s":121.91,"d":1.771,"n":"Ulica Josipa Stadlera","t":"residential"},{"c":[[16.073309,45.836513],[16.074509,45.836002]],"s":121.47,"d":2.215,"n":"Ulica Josipa Stadlera","t":"residential"},{"c":[[16.08122,45.935251],[16.082506,45.93588]],"s":54.86,"d":1.385,"n":"Boscova ulica","t":"residential"},{"c":[[15.928145,45.78062],[15.925668,45.78172]],"s":122.49,"d":1.19,"n":"Aleja Matije Ljubeka","t":"unclassified"},{"c":[[15.939177,45.772117],[15.942966,45.773783]],"s":57.78,"d":1.461,"n":"Jadranska avenija","t":"secondary"},{"c":[[16.0336,45.789392],[16.030771,45.790821]],"s":125.92,"d":2.236,"n":"","t":"path"},{"c":[[16.036608,45.787467],[16.037767,45.786884]],"s":125.78,"d":2.098,"n":"Radnička cesta","t":"secondary"},{"c":[[16.03981,45.785861],[16.041217,45.785157]],"s":125.68,"d":1.992,"n":"Radnička cesta","t":"secondary"},{"c":[[15.879569,45.760736],[15.878334,45.761251]],"s":120.86,"d":2.827,"n":"Hrastovička ulica","t":"residential"},{"c":[[15.857709,45.793693],[15.858913,45.794219]],"s":57.9,"d":1.587,"n":"Ljubljanska avenija","t":"secondary"},{"c":[[15.856112,45.793028],[15.852295,45.791075]],"s":53.73,"d":2.583,"n":"Jankomirski most","t":"secondary"},{"c":[[15.852395,45.790988],[15.856207,45.792942]],"s":53.68,"d":2.641,"n":"Jankomirski most","t":"secondary"},{"c":[[16.002944,45.833407],[16.001734,45.833984]],"s":124.38,"d":0.693,"n":"5. Barutanski ogranak","t":"tertiary"},{"c":[[15.947734,45.774185],[15.948876,45.774684]],"s":57.92,"d":1.601,"n":"Lanište","t":"residential"},{"c":[[15.906341,45.797325],[15.907468,45.796771]],"s":125.19,"d":1.51,"n":"Ulica Miroslava Milića","t":"residential"},{"c":[[15.923245,45.783962],[15.921414,45.784773]],"s":122.44,"d":1.244,"n":"","t":"service"},{"c":[[15.830969,45.76228],[15.832221,45.761721]],"s":122.61,"d":1.07,"n":"Stupničkobreška ulica","t":"tertiary"},{"c":[[15.945051,45.774697],[15.947081,45.775604]],"s":57.33,"d":1.012,"n":"Jadranska avenija","t":"secondary"},{"c":[[15.946068,45.7753],[15.943355,45.774103]],"s":57.69,"d":1.369,"n":"Jadranska avenija","t":"secondary"},{"c":[[15.838787,45.781136],[15.840038,45.780518]],"s":125.33,"d":1.644,"n":"Mikulini","t":"residential"},{"c":[[15.832424,45.778238],[15.83413,45.779101]],"s":54.03,"d":2.287,"n":"Vojkovička ulica","t":"residential"},{"c":[[15.828774,45.812455],[15.829981,45.812958]],"s":59.17,"d":2.851,"n":"Ulica dr. Franje Tuđmana","t":"secondary"},{"c":[[15.902417,45.798411],[15.903738,45.797754]],"s":125.5,"d":1.813,"n":"Ulica Drage Stipca","t":"residential"},{"c":[[15.904258,45.797492],[15.905544,45.796846]],"s":125.78,"d":2.093,"n":"Ulica Drage Stipca","t":"residential"},{"c":[[15.897895,45.768328],[15.895719,45.769448]],"s":126.42,"d":2.732,"n":"","t":"unclassified"},{"c":[[15.980862,45.753974],[15.982391,45.754703]],"s":55.64,"d":0.673,"n":"Zelengorska ulica","t":"service"},{"c":[[15.887559,45.747551],[15.886439,45.74808]],"s":124.07,"d":0.456,"n":"Ulica Mirka Bedeka","t":"residential"},{"c":[[15.888094,45.748091],[15.886796,45.748741]],"s":125.64,"d":2.018,"n":"Ulica Mirka Bedeka","t":"residential"},{"c":[[15.9202,45.789896],[15.918613,45.790625]],"s":123.37,"d":0.317,"n":"Horvaćanska cesta","t":"tertiary"},{"c":[[15.833898,45.777248],[15.835365,45.777981]],"s":54.38,"d":1.933,"n":"Ježdovečka ulica","t":"residential"},{"c":[[16.049727,45.843287],[16.048493,45.843891]],"s":125.09,"d":1.405,"n":"Vranplaninska ulica","t":"residential"},{"c":[[16.047565,45.844665],[16.049099,45.843944]],"s":124.01,"d":0.327,"n":"Ljubuška ulica","t":"residential"},{"c":[[16.04141,45.785341],[16.039969,45.786046]],"s":125.04,"d":1.352,"n":"Radnička cesta","t":"secondary"},{"c":[[15.95648,45.762892],[15.957756,45.763475]],"s":56.76,"d":0.439,"n":"Ulica Franje Malnara IV. odvojak","t":"residential"},{"c":[[16.010511,45.849212],[16.012689,45.850224]],"s":56.28,"d":0.033,"n":"Jazbinski odvojak X.","t":"residential"},{"c":[[16.026391,45.792839],[16.024844,45.793613]],"s":125.64,"d":1.954,"n":"Radnička cesta","t":"secondary"},{"c":[[16.024844,45.793613],[16.023212,45.794434]],"s":125.83,"d":2.146,"n":"Radnička cesta","t":"secondary"},{"c":[[16.022779,45.794651],[16.021575,45.795252]],"s":125.64,"d":1.953,"n":"Radnička cesta","t":"secondary"},{"c":[[15.948387,45.772212],[15.946928,45.771589]],"s":58.53,"d":2.211,"n":"","t":"service"},{"c":[[16.012727,45.908309],[16.014062,45.907736]],"s":121.63,"d":2.118,"n":"Vučje jame","t":"path"},{"c":[[16.023854,45.887188],[16.022225,45.887941]],"s":123.59,"d":0.156,"n":"Petari","t":"residential"},{"c":[[15.936304,45.770883],[15.93758,45.771421]],"s":58.88,"d":2.563,"n":"Jadranska avenija","t":"secondary"},{"c":[[15.878486,45.774714],[15.879744,45.774065]],"s":126.52,"d":2.839,"n":"","t":"service"},{"c":[[16.032992,45.802222],[16.034724,45.801344]],"s":126.05,"d":2.362,"n":"","t":"service"},{"c":[[16.034724,45.801344],[16.035939,45.800743]],"s":125.34,"d":1.655,"n":"","t":"service"},{"c":[[16.037762,45.760441],[16.035742,45.761486]],"s":126.56,"d":2.88,"n":"","t":"service"},{"c":[[16.021544,45.764385],[16.022643,45.763888]],"s":122.96,"d":0.726,"n":"","t":"service"},{"c":[[16.023759,45.76284],[16.027509,45.76102]],"s":124.82,"d":1.14,"n":"","t":"service"},{"c":[[15.864543,45.862364],[15.865831,45.861733]],"s":125.12,"d":1.369,"n":"","t":"path"},{"c":[[15.919708,45.85888],[15.921554,45.859739]],"s":56.24,"d":0.015,"n":"","t":"path"},{"c":[[15.992269,45.912134],[15.990756,45.912901]],"s":126.09,"d":2.338,"n":"Staza 23","t":"path"},{"c":[[16.043853,45.783673],[16.045206,45.783003]],"s":125.39,"d":1.704,"n":"","t":"path"},{"c":[[16.04481,45.783782],[16.04607,45.783155]],"s":125.52,"d":1.833,"n":"","t":"path"},{"c":[[16.029818,45.791299],[16.02729,45.792564]],"s":125.68,"d":1.999,"n":"","t":"path"},{"c":[[16.03852,45.786937],[16.040537,45.785917]],"s":125.96,"d":2.28,"n":"","t":"path"},{"c":[[16.026678,45.792832],[16.023302,45.794521]],"s":125.67,"d":1.986,"n":"","t":"path"},{"c":[[16.022819,45.794768],[16.021404,45.795471]],"s":125.51,"d":1.826,"n":"","t":"path"},{"c":[[15.847338,45.869244],[15.848695,45.869838]],"s":57.85,"d":1.602,"n":"Odvojak Brezinske ulice","t":"residential"},{"c":[[15.84482,45.758144],[15.846645,45.759015]],"s":55.61,"d":0.703,"n":"Široka ulica","t":"road"},{"c":[[15.829199,45.775858],[15.830908,45.775052]],"s":124.07,"d":0.382,"n":"Racka ulica","t":"residential"},{"c":[[15.905418,45.894185],[15.906614,45.894782]],"s":54.34,"d":1.91,"n":"","t":"path"},{"c":[[15.939129,45.933737],[15.940262,45.933255]],"s":121.48,"d":2.267,"n":"","t":"path"},{"c":[[15.980263,45.933774],[15.979142,45.933261]],"s":56.65,"d":0.396,"n":"","t":"path"},{"c":[[16.045727,45.935412],[16.046874,45.935934]],"s":56.8,"d":0.553,"n":"","t":"path"},{"c":[[16.095136,45.865612],[16.093592,45.866299]],"s":122.55,"d":1.203,"n":"Šiletići I.","t":"residential"},{"c":[[16.059243,45.779794],[16.057313,45.78076]],"s":125.67,"d":1.989,"n":"","t":"service"},{"c":[[16.055197,45.779248],[16.056955,45.778381]],"s":125.28,"d":1.592,"n":"","t":"service"},{"c":[[16.054994,45.777654],[16.056293,45.777029]],"s":124.63,"d":0.944,"n":"","t":"service"},{"c":[[15.946364,45.775109],[15.945032,45.774529]],"s":58.04,"d":1.72,"n":"","t":"service"},{"c":[[16.029843,45.791132],[16.028039,45.79202]],"s":125.21,"d":1.531,"n":"Radnička cesta","t":"secondary"},{"c":[[16.033241,45.789404],[16.031489,45.790283]],"s":125.74,"d":2.052,"n":"Radnička cesta","t":"secondary"},{"c":[[16.037839,45.787119],[16.036781,45.78766]],"s":126.21,"d":2.529,"n":"Radnička cesta","t":"secondary"},{"c":[[16.045583,45.783232],[16.044123,45.783965]],"s":125.74,"d":2.055,"n":"Radnička cesta","t":"secondary"},{"c":[[16.049684,45.781172],[16.047519,45.782237]],"s":125.19,"d":1.503,"n":"Radnička cesta","t":"secondary"},{"c":[[16.047362,45.782087],[16.04957,45.780985]],"s":125.58,"d":1.892,"n":"Radnička cesta","t":"secondary"},{"c":[[16.050456,45.780542],[16.052545,45.779489]],"s":125.87,"d":2.182,"n":"Radnička cesta","t":"secondary"},{"c":[[16.001136,45.74794],[15.999693,45.748572]],"s":122.12,"d":1.501,"n":"Bani I. odvojak","t":"residential"},{"c":[[16.054298,45.778612],[16.056826,45.777346]],"s":125.68,"d":1.995,"n":"Radnička cesta","t":"secondary"},{"c":[[15.980843,45.891901],[15.979441,45.892564]],"s":124.18,"d":0.433,"n":"","t":"path"},{"c":[[15.936144,45.751909],[15.934957,45.752401]],"s":120.72,"d":2.96,"n":"Ulica Filipa Latinovicza","t":"residential"},{"c":[[15.924583,45.782203],[15.922939,45.782939]],"s":122.73,"d":0.956,"n":"Aleja Matije Ljubeka","t":"unclassified"},{"c":[[15.9229,45.782957],[15.920199,45.784165]],"s":122.66,"d":1.02,"n":"Aleja Matije Ljubeka","t":"unclassified"},{"c":[[15.920199,45.784165],[15.917851,45.785213]],"s":122.65,"d":1.037,"n":"Aleja Matije Ljubeka","t":"unclassified"},{"c":[[15.916573,45.785789],[15.914998,45.786487]],"s":122.46,"d":1.22,"n":"Aleja Matije Ljubeka","t":"unclassified"},{"c":[[15.91449,45.786711],[15.912661,45.787526]],"s":122.55,"d":1.13,"n":"Aleja Matije Ljubeka","t":"unclassified"},{"c":[[16.05987,45.776036],[16.058027,45.776955]],"s":125.56,"d":1.879,"n":"Radnička cesta","t":"secondary"},{"c":[[16.061078,45.775229],[16.063004,45.774275]],"s":125.39,"d":1.706,"n":"Radnička cesta","t":"secondary"},{"c":[[16.058207,45.77666],[16.059735,45.775917]],"s":124.89,"d":1.203,"n":"Radnička cesta","t":"secondary"},{"c":[[16.056497,45.777755],[16.055377,45.778316]],"s":125.66,"d":1.975,"n":"Radnička cesta","t":"secondary"},{"c":[[16.063564,45.774176],[16.060784,45.775574]],"s":125.8,"d":2.112,"n":"Radnička cesta","t":"secondary"},{"c":[[15.947811,45.77605],[15.946068,45.7753]],"s":58.33,"d":2.013,"n":"Jadranska avenija","t":"secondary"},{"c":[[15.887529,45.840735],[15.885994,45.839952]],"s":53.77,"d":2.551,"n":"Zelena magistrala","t":"unclassified"},{"c":[[16.052195,45.779983],[16.050607,45.780775]],"s":125.58,"d":1.898,"n":"","t":"path"},{"c":[[16.049715,45.781227],[16.048134,45.782025]],"s":125.92,"d":2.232,"n":"","t":"path"},{"c":[[16.048105,45.781652],[16.049343,45.781033]],"s":125.65,"d":1.962,"n":"","t":"path"},{"c":[[16.050426,45.780494],[16.052305,45.779552]],"s":125.71,"d":2.024,"n":"","t":"path"},{"c":[[15.835144,45.761085],[15.833785,45.760522]],"s":59.26,"d":2.944,"n":"Dvorski put","t":"residential"},{"c":[[16.053428,45.779295],[16.050572,45.780721]],"s":125.6,"d":1.917,"n":"Radnička cesta","t":"secondary"},{"c":[[15.890655,45.749562],[15.891865,45.74903]],"s":122.23,"d":1.386,"n":"","t":"service"},{"c":[[15.872055,45.859249],[15.873598,45.858569]],"s":122.34,"d":1.415,"n":"Staza 5","t":"path"},{"c":[[15.864449,45.833274],[15.866053,45.833977]],"s":57.83,"d":1.51,"n":"","t":"path"},{"c":[[15.896306,45.74653],[15.894858,45.747276]],"s":126.45,"d":2.833,"n":"Pavlovačka ulica","t":"residential"},{"c":[[16.028258,45.802431],[16.029354,45.80187]],"s":126.3,"d":2.616,"n":"","t":"path"},{"c":[[16.036416,45.78799],[16.038223,45.787071]],"s":126.12,"d":2.433,"n":"","t":"path"},{"c":[[16.036528,45.787344],[16.037656,45.786769]],"s":126.18,"d":2.498,"n":"","t":"path"},{"c":[[16.028616,45.791319],[16.029922,45.790663]],"s":125.79,"d":2.107,"n":"","t":"path"},{"c":[[16.043924,45.783796],[16.045876,45.78282]],"s":125.63,"d":1.945,"n":"Radnička cesta","t":"secondary"},{"c":[[16.021213,45.795435],[16.02,45.796043]],"s":125.72,"d":2.038,"n":"Radnička cesta","t":"secondary"},{"c":[[16.021774,45.794893],[16.022862,45.794342]],"s":125.99,"d":2.302,"n":"Radnička cesta","t":"secondary"},{"c":[[16.031934,45.789637],[16.033544,45.788846]],"s":125.15,"d":1.47,"n":"","t":"path"},{"c":[[16.056045,45.802289],[16.057647,45.802968]],"s":58.67,"d":2.355,"n":"","t":"service"},{"c":[[16.029815,45.762511],[16.028476,45.763094]],"s":121.96,"d":1.72,"n":"","t":"service"},{"c":[[16.086769,45.930412],[16.088491,45.931197]],"s":56.75,"d":0.504,"n":"","t":"path"},{"c":[[16.060195,45.77552],[16.062472,45.774381]],"s":125.62,"d":1.935,"n":"","t":"path"},{"c":[[16.063083,45.774606],[16.060662,45.775796]],"s":125.16,"d":1.48,"n":"","t":"path"},{"c":[[16.058042,45.776568],[16.059663,45.775738]],"s":126.29,"d":2.608,"n":"","t":"path"},{"c":[[16.059842,45.776238],[16.058285,45.777039]],"s":126.42,"d":2.74,"n":"","t":"path"},{"c":[[16.057804,45.777281],[16.056664,45.777827]],"s":124.49,"d":0.805,"n":"","t":"path"},{"c":[[16.056569,45.777873],[16.055512,45.778396]],"s":125.34,"d":1.652,"n":"","t":"path"},{"c":[[16.054185,45.778498],[16.055718,45.777721]],"s":125.99,"d":2.311,"n":"","t":"path"},{"c":[[16.034795,45.788781],[16.03633,45.788028]],"s":125.1,"d":1.421,"n":"","t":"path"},{"c":[[16.030352,45.790454],[16.031801,45.789705]],"s":126.56,"d":2.881,"n":"","t":"path"},{"c":[[16.01613,45.771358],[16.017557,45.772025]],"s":56.21,"d":0.103,"n":"","t":"service"},{"c":[[15.904994,45.797046],[15.903805,45.797648]],"s":126.0,"d":2.32,"n":"","t":"path"},{"c":[[16.033461,45.799698],[16.031956,45.800463]],"s":126.14,"d":2.452,"n":"Ulica grada Gospića","t":"tertiary"},{"c":[[16.028029,45.802457],[16.029755,45.801591]],"s":125.75,"d":2.069,"n":"Ulica grada Gospića","t":"tertiary"},{"c":[[16.087802,45.778266],[16.086428,45.777644]],"s":57.02,"d":0.708,"n":"","t":"unclassified"},{"c":[[16.086428,45.777644],[16.084489,45.776713]],"s":55.44,"d":0.874,"n":"","t":"unclassified"},{"c":[[16.055218,45.777826],[16.056581,45.77716]],"s":125.01,"d":1.331,"n":"","t":"service"},{"c":[[16.005684,45.785556],[16.006926,45.784926]],"s":126.03,"d":2.342,"n":"","t":"service"},{"c":[[16.031533,45.861571],[16.030081,45.862316]],"s":126.38,"d":2.626,"n":"","t":"residential"},{"c":[[15.953865,45.772303],[15.952685,45.772838]],"s":123.03,"d":0.656,"n":"","t":"service"},{"c":[[15.845846,45.81183],[15.847045,45.811228]],"s":125.81,"d":2.123,"n":"","t":"service"},{"c":[[15.855131,45.899401],[15.853876,45.900007]],"s":124.75,"d":0.998,"n":"Stubička ulica","t":"secondary"}];
+
+/* ============================ constants ============================ */
+const D2R=Math.PI/180, R2D=180/Math.PI;
+const CITY={lat:45.8412, lng:15.9656};           // initial view (Zagreb)
+let OBSERVER={lat:CITY.lat, lng:CITY.lng};       // sun-calc point; follows the loaded area
+const REF_YEAR=2026; // non-leap, 365 days
+// Global mirrors (osm.ch removed — it only holds Swiss data, so it returns empty for other cities).
+const OVERPASS=[
+  "https://overpass-api.de/api/interpreter",
+  "https://overpass.private.coffee/api/interpreter",
+  "https://overpass.kumi.systems/api/interpreter"
+];
+// CORS proxies: used only if the direct browser request is blocked ("Failed to fetch").
+// They fetch server-side and add permissive CORS headers, which is what unblocks it.
+const PROXIES=[
+  u=>"https://api.allorigins.win/raw?url="+encodeURIComponent(u),
+  u=>"https://corsproxy.io/?url="+encodeURIComponent(u)
+];
+const FETCH_TIMEOUT=90000; // direct mirror cap
+const PROXY_TIMEOUT=45000; // proxy cap
+const TYPE_GROUPS={
+  "Major":["motorway","motorway_link","trunk","trunk_link","primary","primary_link"],
+  "Secondary":["secondary","secondary_link","tertiary","tertiary_link"],
+  "Residential":["residential","living_street","unclassified","road","pedestrian"],
+  "Service":["service","track"],
+  "Paths":["path"]
+};
+const DEFAULT_ON={"Major":true,"Secondary":true,"Residential":true,"Service":true,"Paths":true};
+
+/* ============================ solar position (validated vs pyephem) ============================ */
+function toJD(d){ return d.getTime()/86400000 + 2440587.5; }
+function sunAltAz(date,latDeg,lngDeg){
+  const n=toJD(date)-2451545.0;
+  const g=((357.529+0.98560028*n)%360)*D2R;
+  const L=(280.459+0.98564736*n)%360;
+  const lambda=((L+1.915*Math.sin(g)+0.020*Math.sin(2*g))%360)*D2R;
+  const eps=(23.439-0.00000036*n)*D2R;
+  const dec=Math.asin(Math.sin(eps)*Math.sin(lambda));
+  const ra=Math.atan2(Math.cos(eps)*Math.sin(lambda),Math.cos(lambda));
+  const GMST=(280.46061837+360.98564736629*n)%360;
+  const LST=(((GMST+lngDeg)%360)+360)%360;
+  let H=(LST-ra*R2D)*D2R; H=Math.atan2(Math.sin(H),Math.cos(H));
+  const lat=latDeg*D2R;
+  const sinAlt=Math.sin(lat)*Math.sin(dec)+Math.cos(lat)*Math.cos(dec)*Math.cos(H);
+  const alt=Math.asin(Math.max(-1,Math.min(1,sinAlt)));
+  let cosA=(Math.sin(dec)-Math.sin(lat)*sinAlt)/(Math.cos(lat)*Math.cos(alt));
+  cosA=Math.max(-1,Math.min(1,cosA));
+  let A=Math.acos(cosA)*R2D; if(Math.sin(H)>0) A=360-A;
+  return {alt:alt*R2D, az:A};
+}
+const H0=-0.833;
+function findCross(day,lat,lng,h0,h1){
+  let prev=null,prevAlt=null;
+  for(let m=h0*60;m<=h1*60;m+=2){
+    const d=new Date(day.getTime()+m*60000);
+    const a=sunAltAz(d,lat,lng).alt;
+    if(prevAlt!==null && ((prevAlt<H0&&a>=H0)||(prevAlt>=H0&&a<H0))){
+      let lo=prev.getTime(),hi=d.getTime();
+      for(let i=0;i<38;i++){const mid=(lo+hi)/2;
+        const altLo=sunAltAz(new Date(lo),lat,lng).alt-H0, altMid=sunAltAz(new Date(mid),lat,lng).alt-H0;
+        if(altLo*altMid<=0) hi=mid; else lo=mid;}
+      const t=new Date((lo+hi)/2);
+      return {t, az:sunAltAz(t,lat,lng).az};
+    }
+    prev=d; prevAlt=a;
+  }
+  return null;
+}
+function sunAzimuths(day,lat,lng){
+  // Center the search on local solar noon (UTC hours) so rise/set are correct at any longitude,
+  // not just near Greenwich. rise = ascending crossing before noon; set = descending after noon.
+  const noon = 12 - lng/15;
+  const rise=findCross(day,lat,lng,noon-12,noon), set=findCross(day,lat,lng,noon,noon+12);
+  return {rise:rise?rise.az:null, set:set?set.az:null,
+          riseT:rise?rise.t:null, setT:set?set.t:null};
+}
+const fold=a=> a>180? a-180 : a;
+function circ180(a,b){ let d=Math.abs(a-b)%180; return Math.min(d,180-d); }
+
+/* ============================ street bearing (exact port of geo_utils) ============================ */
+const ER=6373000.0;
+function segLen(a,b){ // [lng,lat]
+  const la1=a[1]*D2R,lo1=a[0]*D2R,la2=b[1]*D2R,lo2=b[0]*D2R;
+  const dlo=lo2-lo1,dla=la2-la1;
+  const h=Math.sin(dla/2)**2+Math.cos(la1)*Math.cos(la2)*Math.sin(dlo/2)**2;
+  return ER*2*Math.atan2(Math.sqrt(h),Math.sqrt(1-h));
+}
+function segDetails(a,b){
+  const p=[a[0],b[1]];
+  let dy=segLen(a,p), dx=segLen(p,b);
+  if(a[0]>b[0]) dx=-dx;
+  if(a[1]>b[1]) dy=-dy;
+  let az=Math.atan2(dy,dx)*R2D;
+  if(az<0) az+=180;
+  az=(((-az+270)%360)+360)%360;
+  if(az>180) az-=180;
+  return [az, segLen(a,b)];
+}
+
+/* ============================ cardinal helper ============================ */
+function cardinal(az){
+  const dirs=["N","NNE","NE","ENE","E","ESE","SE","SSE","S","SSW","SW","WSW","W","WNW","NW","NNW"];
+  return dirs[Math.round(((az%360)+360)%360/22.5)%16];
+}
+
+/* ============================ map ============================ */
+const map=L.map('map',{preferCanvas:true, zoomControl:true}).setView([CITY.lat,CITY.lng],12);
+map.zoomControl.setPosition('topright'); // keep clear of the control panel
+L.tileLayer('https://{s}.basemaps.cartocdn.com/light_nolabels/{z}/{x}/{y}{r}.png',{
+  attribution:'&copy; OpenStreetMap &copy; CARTO', maxZoom:19, subdomains:'abcd'
+}).addTo(map);
+L.tileLayer('https://{s}.basemaps.cartocdn.com/light_only_labels/{z}/{x}/{y}{r}.png',
+  {maxZoom:19,subdomains:'abcd',pane:'shadowPane',opacity:.9}).addTo(map);
+
+const canvasRenderer=L.canvas({padding:.5});
+const alignLayer=L.layerGroup().addTo(map);
+const valLayer=L.layerGroup();
+
+/* ============================ state ============================ */
+let SEGMENTS=[]; // {coords:[[lng,lat],[lng,lat]], orient, length, name, type, group}
+let typeOn=Object.assign({},DEFAULT_ON);
+let mode="both", threshold=3.0, minLen=100;
+let curDate=new Date(Date.UTC(REF_YEAR,11,21)); // default = 21 Dec (sztanko's reference)
+let anim=null;
+const IS_MOBILE = (window.matchMedia&&window.matchMedia('(pointer:coarse)').matches) || window.innerWidth<560;
+let sunByDayCache={key:null}; // memoized per-observer rise/set orientation table for "best day"
+
+/* ============================ color ============================ */
+function rampColor(ratio){ // 0 exact -> 1 at threshold
+  ratio=Math.max(0,Math.min(1,ratio));
+  // red(0) -> orange -> gold(1)
+  const hue=4+ratio*44;                 // 4° red to 48° gold
+  const sat=82-ratio*14;
+  const lit=46+ratio*12;
+  return `hsl(${hue} ${sat}% ${lit}%)`;
+}
+
+/* ============================ rendering ============================ */
+function render(){
+  const day=curDate;
+  const sa=sunAzimuths(day,OBSERVER.lat,OBSERVER.lng);
+  const riseF=sa.rise!=null?fold(sa.rise):null;
+  const setF =sa.set!=null?fold(sa.set):null;
+  const targets=[];
+  if((mode==="both"||mode==="rise")&&riseF!=null) targets.push(riseF);
+  if((mode==="both"||mode==="set") &&setF !=null) targets.push(setF);
+
+  alignLayer.clearLayers();
+  let count=0;
+  for(const s of SEGMENTS){
+    if(!typeOn[s.group]) continue;
+    if(s.length<minLen) continue;
+    let best=Infinity;
+    for(const t of targets){ const d=circ180(t,s.orient); if(d<best) best=d; }
+    if(best>=threshold) continue;
+    count++;
+    const ll=[[s.coords[0][1],s.coords[0][0]],[s.coords[1][1],s.coords[1][0]]];
+    const ratio=best/threshold;
+    L.polyline(ll,{renderer:canvasRenderer,color:rampColor(ratio),
+        weight:4.2-2.4*ratio, opacity:0.95-0.25*ratio, lineCap:'round'})
+      .on('click',()=>popupFor(s))
+      .addTo(alignLayer);
+  }
+
+  // readouts
+  document.getElementById('roRise').textContent = sa.rise!=null? `${sa.rise.toFixed(1)}° ${cardinal(sa.rise)}` : "—";
+  document.getElementById('roSet').textContent  = sa.set!=null ? `${sa.set.toFixed(1)}° ${cardinal(sa.set)}`  : "—";
+  document.getElementById('roTargets').textContent = targets.length
+      ? targets.map(t=>`${t.toFixed(1)}°`).join(" / ") : "—";
+  document.getElementById('roCount').textContent =
+      (sa.rise==null&&sa.set==null) ? "no sunrise/sunset" : count.toLocaleString();
+  drawCompass(sa.rise,sa.set,targets);
+}
+
+// ---- "best day for this street": rise/set orientation for every day, memoized per observer ----
+function getSunByDay(){
+  const key=OBSERVER.lat.toFixed(2)+","+OBSERVER.lng.toFixed(2);
+  if(sunByDayCache.key===key) return sunByDayCache;
+  const rise=new Array(366).fill(NaN), set=new Array(366).fill(NaN);
+  for(let d=1;d<=365;d++){
+    const sa=sunAzimuths(dateFromDOY(d),OBSERVER.lat,OBSERVER.lng);
+    if(sa.rise!=null) rise[d]=fold(sa.rise);
+    if(sa.set !=null) set[d] =fold(sa.set);
+  }
+  sunByDayCache={key,rise,set};
+  return sunByDayCache;
+}
+function scanDays(arr,orient){
+  let best=Infinity,bestD=0,count=0;
+  for(let d=1;d<=365;d++){
+    if(isNaN(arr[d])) continue;
+    const diff=circ180(arr[d],orient);
+    if(diff<threshold) count++;
+    if(diff<best){ best=diff; bestD=d; }
+  }
+  return {best,bestD,count};
+}
+const fmtDOY=d=> d?dateFromDOY(d).toLocaleDateString('en-GB',{day:'numeric',month:'short',timeZone:'UTC'}):'—';
+window.jumpToDay=function(d){ curDate=dateFromDOY(d); syncDateUI(); render(); };
+
+function popupFor(s){
+  const sb=getSunByDay();
+  const rise=scanDays(sb.rise,s.orient), set=scanDays(sb.set,s.orient);
+  function row(label,r,color){
+    const reachable=r.bestD>0;
+    const dateLink=reachable?`<a href="#" onclick="jumpToDay(${r.bestD});return false;">${fmtDOY(r.bestD)}</a>`:'—';
+    const within=r.count>0;
+    const tail = within ? ` · ±${threshold.toFixed(1)}° on <b>${r.count}</b> day${r.count>1?'s':''}`
+                        : ` · never within ±${threshold.toFixed(1)}°`;
+    return `<div class="tipmeta" style="margin-top:3px"><span style="color:${color}">●</span> best ${label}: <b>${dateLink}</b> <span style="color:var(--mut2)">(off ${r.best.toFixed(1)}°)</span>${tail}</div>`;
+  }
+  let body=`<div class="tipname">${s.name||'(unnamed '+s.type+')'}</div>
+    <div class="tipmeta">${s.type} · ${s.length.toFixed(0)} m · orientation <b>${s.orient.toFixed(1)}°</b></div>`;
+  if(mode==="both"||mode==="rise") body+=row("sunrise",rise,"#e0892a");
+  if(mode==="both"||mode==="set")  body+=row("sunset", set, "#9a4fb0");
+  L.popup({offset:[0,2],maxWidth:260}).setLatLng([(s.coords[0][1]+s.coords[1][1])/2,(s.coords[0][0]+s.coords[1][0])/2])
+    .setContent(body).openOn(map);
+}
+
+/* ============================ compass (signature element) ============================ */
+function drawCompass(rise,set,targets){
+  const cx=48,cy=48,r=38;
+  const svg=document.getElementById('compass');
+  const P=[];
+  P.push(`<circle cx="${cx}" cy="${cy}" r="${r}" fill="#fff" stroke="#e7e4dd"/>`);
+  // cardinal ticks + labels
+  const card=[["N",0],["E",90],["S",180],["W",270]];
+  for(const [l,a] of card){
+    const rad=(a-90)*D2R;
+    const x1=cx+Math.cos(rad)*r, y1=cy+Math.sin(rad)*r;
+    const x2=cx+Math.cos(rad)*(r-5), y2=cy+Math.sin(rad)*(r-5);
+    P.push(`<line x1="${x1.toFixed(1)}" y1="${y1.toFixed(1)}" x2="${x2.toFixed(1)}" y2="${y2.toFixed(1)}" stroke="#c8c4ba"/>`);
+    const lx=cx+Math.cos(rad)*(r+7), ly=cy+Math.sin(rad)*(r+7)+3;
+    P.push(`<text x="${lx.toFixed(1)}" y="${ly.toFixed(1)}" font-size="8" fill="#9a958b" text-anchor="middle" font-family="IBM Plex Mono">${l}</text>`);
+  }
+  // highlighted orientation bands (undirected -> draw both directions)
+  for(const t of targets){
+    for(const a of [t,t+180]){
+      const rad=(a-90)*D2R;
+      P.push(`<line x1="${(cx-Math.cos(rad)*0).toFixed(1)}" y1="${(cy-Math.sin(rad)*0).toFixed(1)}" x2="${(cx+Math.cos(rad)*(r-3)).toFixed(1)}" y2="${(cy+Math.sin(rad)*(r-3)).toFixed(1)}" stroke="#e9c98f" stroke-width="6" stroke-linecap="round" opacity="0.55"/>`);
+    }
+  }
+  // sun rays
+  function ray(az,color){
+    if(az==null) return;
+    const rad=(az-90)*D2R;
+    const x=cx+Math.cos(rad)*(r-3), y=cy+Math.sin(rad)*(r-3);
+    P.push(`<line x1="${cx}" y1="${cy}" x2="${x.toFixed(1)}" y2="${y.toFixed(1)}" stroke="${color}" stroke-width="2"/>`);
+    P.push(`<circle cx="${x.toFixed(1)}" cy="${y.toFixed(1)}" r="3.4" fill="${color}"/>`);
+  }
+  ray(rise,"#e0892a");
+  ray(set,"#9a4fb0");
+  P.push(`<circle cx="${cx}" cy="${cy}" r="2" fill="#1b1a17"/>`);
+  svg.innerHTML=P.join("");
+}
+
+/* ============================ validation overlay ============================ */
+function buildValidation(){
+  valLayer.clearLayers();
+  for(const f of VALIDATION){
+    const ll=[[f.c[0][1],f.c[0][0]],[f.c[1][1],f.c[1][0]]];
+    L.polyline(ll,{renderer:canvasRenderer,color:'#1f6f8b',weight:1.6,opacity:.85,dashArray:'2,3'})
+      .on('click',e=>{L.popup().setLatLng(e.latlng).setContent(
+        `<div class="tipname">${f.n||'(unnamed)'}</div><div class="tipmeta">reference · type <b>${f.t}</b><br>orientation <b>${f.s}°</b> · off by <b>${f.d}°</b></div>`).openOn(map);})
+      .addTo(valLayer);
+  }
+}
+
+/* ============================ Overpass load ============================ */
+function classify(hw){
+  for(const g in TYPE_GROUPS) if(TYPE_GROUPS[g].includes(hw)) return g;
+  return "Residential"; // fallback so kept-but-unmapped highway types aren't silently dropped
+}
+// Heavy types (service/track/path) are the slow part of an Overpass query. Off by default for
+// speed/reliability; the named street grid alone catches most alignments incl. the named Jarun streets.
+const HW_NOISE="footway|cycleway|steps|construction|proposed|raceway|bus_guideway|corridor|platform|elevator|escalator|bridleway|via_ferrata";
+// Default = full network (the configuration that worked originally). "mainOnly" drops the heavy
+// service/track/path types for speed when needed.
+function currentBBox(){
+  const b=map.getBounds();
+  return {s:b.getSouth(), w:b.getWest(), n:b.getNorth(), e:b.getEast()};
+}
+function bboxAreaKm2(bb){
+  const midLat=(bb.s+bb.n)/2*D2R;
+  return ((bb.n-bb.s)*111)*((bb.e-bb.w)*111*Math.cos(midLat));
+}
+function buildQuery(mainOnly, bb){
+  const exc = mainOnly ? HW_NOISE+"|service|track|path" : HW_NOISE;
+  return `[out:json][timeout:90];way["highway"]["highway"!~"^(${exc})$"](${bb.s.toFixed(6)},${bb.w.toFixed(6)},${bb.n.toFixed(6)},${bb.e.toFixed(6)});out geom;`;
+}
+async function oneFetch(url, opts, timeout){
+  const ctrl=new AbortController();
+  const timer=setTimeout(()=>ctrl.abort(),timeout);
+  try{
+    const r=await fetch(url,{...opts,signal:ctrl.signal});
+    if(!r.ok) throw new Error("HTTP "+r.status);
+    const j=await r.json();
+    if(!j.elements||!j.elements.length) throw new Error("empty");
+    return j;
+  }finally{ clearTimeout(timer); }
+}
+function hostOf(u){ try{return new URL(u).host;}catch(e){return u;} }
+function normErr(e){ return e.name==="AbortError"?"timeout":(e.message||"failed"); }
+async function fetchOverpass(query){
+  const reasons=[];
+  // 1) direct POST to each mirror
+  for(const ep of OVERPASS){
+    try{ setLoad(`Loading streets…\n${hostOf(ep)}`);
+      return await oneFetch(ep,{method:"POST",body:"data="+encodeURIComponent(query)},FETCH_TIMEOUT);
+    }catch(e){ reasons.push(`${hostOf(ep)}: ${normErr(e)}`); }
+  }
+  // 2) CORS-proxy GET fallback (gets through when the browser blocks the direct request)
+  for(const ep of OVERPASS.slice(0,2)){
+    const target=ep+"?data="+encodeURIComponent(query);
+    for(let i=0;i<PROXIES.length;i++){
+      try{ setLoad(`Direct mirrors blocked — trying CORS proxy ${i+1}…`);
+        return await oneFetch(PROXIES[i](target),{},PROXY_TIMEOUT);
+      }catch(e){ reasons.push(`proxy${i+1}/${hostOf(ep)}: ${normErr(e)}`); }
+    }
+  }
+  throw new Error(reasons.join(" · "));
+}
+// ---- ingest Overpass JSON (out geom) ----
+function ingestOverpass(data){
+  let n=0;
+  for(const el of (data.elements||[])){
+    if(el.type!=="way"||!el.geometry) continue;
+    const hw=el.tags&&el.tags.highway; if(!hw) continue;
+    const g=classify(hw), name=el.tags&&el.tags.name||"", gm=el.geometry;
+    for(let i=0;i<gm.length-1;i++){
+      const a=[gm[i].lon,gm[i].lat], b=[gm[i+1].lon,gm[i+1].lat];
+      const [orient,length]=segDetails(a,b);
+      if(length<20) continue;
+      SEGMENTS.push({coords:[a,b],orient,length,name,type:hw,group:g}); n++;
+    }
+  }
+  return n;
+}
+// ---- ingest GeoJSON (FeatureCollection of LineString/MultiLineString) ----
+function ingestGeoJSON(gj){
+  let n=0;
+  const feats = gj.type==="FeatureCollection" ? gj.features : (gj.type==="Feature" ? [gj] : []);
+  for(const f of feats){
+    const geom=f.geometry; if(!geom) continue;
+    const lines = geom.type==="LineString" ? [geom.coordinates]
+                : geom.type==="MultiLineString" ? geom.coordinates : [];
+    const p=f.properties||{};
+    const hw=p.highway||p.type||"street", g=classify(hw), name=p.name||"";
+    for(const line of lines){
+      for(let i=0;i<line.length-1;i++){
+        const a=[line[i][0],line[i][1]], b=[line[i+1][0],line[i+1][1]];
+        const [orient,length]=segDetails(a,b);
+        if(length<20) continue;
+        SEGMENTS.push({coords:[a,b],orient,length,name,type:hw,group:g}); n++;
+      }
+    }
+  }
+  return n;
+}
+
+let mainOnly=IS_MOBILE; // phones: lighter query by default so a slow mirror can return in time
+async function loadStreets(){
+  const bb=currentBBox();
+  const area=bboxAreaKm2(bb);
+  const cap = mainOnly ? 15000 : 6000; // km² — all-highways gets heavy past this
+  if(area>cap){
+    showMsg(`This view is ~${Math.round(area).toLocaleString()} km² — too large for an all-streets query. Zoom in to a city-sized area (under ~${cap.toLocaleString()} km²)${mainOnly?'':', or tick “Main roads only”'} and try again.`);
+    return;
+  }
+  SEGMENTS=[];
+  OBSERVER={lat:(bb.s+bb.n)/2, lng:(bb.w+bb.e)/2};
+  document.getElementById('err').style.display="none";
+  document.getElementById('loading').style.display="flex";
+  setStatus("");
+  let data;
+  try{ data=await fetchOverpass(buildQuery(mainOnly,bb)); }
+  catch(e){ showErr(e); return; }
+  setLoad("Processing segments…");
+  ingestOverpass(data);
+  document.getElementById('loading').style.display="none";
+  finishLoad("Overpass");
+  reverseGeocode(OBSERVER);
+}
+// best-effort area name (non-blocking, degrades to coordinates)
+async function reverseGeocode(o){
+  setAreaName(`${o.lat.toFixed(3)}, ${o.lng.toFixed(3)}`);
+  try{
+    const u=`https://nominatim.openstreetmap.org/reverse?format=jsonv2&zoom=12&lat=${o.lat}&lon=${o.lng}`;
+    const ctrl=new AbortController(); const t=setTimeout(()=>ctrl.abort(),8000);
+    const r=await fetch(u,{signal:ctrl.signal,headers:{"Accept":"application/json"}});
+    clearTimeout(t);
+    if(!r.ok) return;
+    const j=await r.json(); const a=j.address||{};
+    const name=a.city||a.town||a.village||a.municipality||a.county||a.state||j.name;
+    if(name) setAreaName(name);
+  }catch(e){ /* keep coordinates */ }
+}
+function setAreaName(t){ const e=document.getElementById('areaName'); if(e) e.textContent=t; }
+function finishLoad(src){
+  if(SEGMENTS.length===0){ showEmpty(); return; }
+  setStatus(`${SEGMENTS.length.toLocaleString()} segments loaded (${src}).`);
+  setTimeout(()=>{ const s=document.getElementById('status'); if(s.textContent.includes(src)) setStatus(""); },4000);
+  render();
+}
+function setLoad(t){ document.getElementById('loadtxt').textContent=t; }
+function setStatus(t){ const s=document.getElementById('status'); s.textContent=t; s.style.display=t?"block":"none"; }
+function showMsg(html){
+  document.getElementById('loading').style.display="none";
+  const el=document.getElementById('err'); el.style.display="block"; el.innerHTML=html;
+}
+function showEmpty(){
+  showMsg(`Overpass returned no streets for this view. If you're in the app preview, external requests are blocked — <b>download the file and open it in a browser tab</b>. Then Retry, or load a saved file.<br><button id="retry">Retry</button>`);
+  document.getElementById('retry').onclick=()=>loadStreets();
+  buildValidation(); valLayer.addTo(map); document.getElementById('showVal').checked=true; render();
+}
+function showErr(e){
+  showMsg(`Public Overpass servers wouldn't respond (they're often overloaded/blocked from a browser).<br><span style="color:var(--mut2);font-size:10px">${e?e.message:'network error'}</span><br><br><b>Most reliable fix:</b> grab the data once and load it offline — open <a href="https://overpass-turbo.eu" target="_blank" rel="noopener">overpass-turbo.eu</a>, run a query for this area, Export → GeoJSON, then use <b>Load file…</b> below. Or just press Retry.<br><button id="retry">Retry</button>`);
+  document.getElementById('retry').onclick=()=>loadStreets();
+  buildValidation(); valLayer.addTo(map); document.getElementById('showVal').checked=true; render();
+}
+// ---- file import (fully offline fallback) ----
+function importFile(file){
+  const r=new FileReader();
+  r.onload=()=>{
+    try{
+      const j=JSON.parse(r.result);
+      SEGMENTS=[];
+      const n = (j.elements) ? ingestOverpass(j) : ingestGeoJSON(j);
+      document.getElementById('err').style.display="none";
+      if(!n){ setStatus("No usable line geometry in that file."); return; }
+      finishLoad(file.name);
+    }catch(e){ setStatus("Couldn't parse that file: "+e.message); }
+  };
+  r.readAsText(file);
+}
+
+/* ============================ controls ============================ */
+function dateFromDOY(doy){ const d=new Date(Date.UTC(REF_YEAR,0,1)); d.setUTCDate(doy); return d; }
+function doyFromDate(d){ const start=Date.UTC(d.getUTCFullYear(),0,1); return Math.round((d.getTime()-start)/86400000)+1; }
+function syncDateUI(){
+  const iso=curDate.toISOString().slice(0,10);
+  document.getElementById('date').value=iso;
+  document.getElementById('doy').value=doyFromDate(curDate);
+  const o={month:'long',day:'numeric',timeZone:'UTC'};
+  document.getElementById('dateLabel').textContent=curDate.toLocaleDateString('en-GB',o);
+  const md=iso.slice(5);
+  document.querySelectorAll('.presets button').forEach(b=>b.classList.toggle('on',b.dataset.d===md));
+}
+const doy=document.getElementById('doy');
+doy.addEventListener('input',()=>{ curDate=dateFromDOY(+doy.value); syncDateUI(); render(); });
+document.querySelector('.presets').addEventListener('click',e=>{
+  const b=e.target.closest('button'); if(!b) return;
+  const [m,d]=b.dataset.d.split('-').map(Number);
+  curDate=new Date(Date.UTC(REF_YEAR,m-1,d)); syncDateUI(); render();
+});
+document.getElementById('date').addEventListener('change',e=>{
+  const [y,m,d]=e.target.value.split('-').map(Number);
+  curDate=new Date(Date.UTC(REF_YEAR,m-1,d)); syncDateUI(); render();
+});
+document.getElementById('mode').addEventListener('click',e=>{
+  const b=e.target.closest('button'); if(!b) return;
+  [...e.currentTarget.children].forEach(x=>x.classList.remove('on'));
+  b.classList.add('on'); mode=b.dataset.m; render();
+});
+const thr=document.getElementById('thr');
+thr.addEventListener('input',()=>{ threshold=+thr.value;
+  document.getElementById('thrLabel').textContent=`±${threshold.toFixed(1)}°`;
+  document.getElementById('rampMax').textContent=`±${threshold.toFixed(1)}°`;
+  render(); });
+const len=document.getElementById('len');
+len.addEventListener('input',()=>{ minLen=+len.value;
+  document.getElementById('lenLabel').textContent=`${minLen} m`; render(); });
+
+document.getElementById('showVal').addEventListener('change',e=>{
+  if(e.target.checked) valLayer.addTo(map);
+  else map.removeLayer(valLayer);
+});
+
+// animate through the year
+const playBtn=document.getElementById('play');
+playBtn.addEventListener('click',()=>{
+  if(anim){ clearInterval(anim); anim=null; playBtn.innerHTML='<svg viewBox="0 0 24 24" fill="currentColor"><path d="M8 5v14l11-7z"/></svg>'; return; }
+  playBtn.innerHTML='<svg viewBox="0 0 24 24" fill="currentColor"><path d="M6 5h4v14H6zM14 5h4v14h-4z"/></svg>';
+  anim=setInterval(()=>{
+    let v=+doy.value+2; if(v>365) v=1; doy.value=v;
+    curDate=dateFromDOY(v); syncDateUI(); render();
+  },90);
+});
+
+// types UI
+const typesEl=document.getElementById('types');
+Object.keys(TYPE_GROUPS).forEach(g=>{
+  const id="t_"+g;
+  const l=document.createElement('label'); l.className="check";
+  l.innerHTML=`<input type="checkbox" id="${id}" ${DEFAULT_ON[g]?'checked':''}> ${g}`;
+  l.querySelector('input').addEventListener('change',e=>{ typeOn[g]=e.target.checked; render(); });
+  typesEl.appendChild(l);
+});
+
+// collapse on mobile
+document.getElementById('head').addEventListener('click',e=>{
+  if(window.innerWidth>560) return;
+  document.getElementById('panel').classList.toggle('min');
+  document.getElementById('collapse').textContent=document.getElementById('panel').classList.contains('min')?'+':'–';
+});
+
+// data-source controls
+document.getElementById('incPaths').checked=mainOnly; // reflects mobile default
+document.getElementById('incPaths').addEventListener('change',e=>{ mainOnly=e.target.checked; loadStreets(); });
+document.getElementById('reloadBtn').addEventListener('click',()=>loadStreets());
+document.getElementById('fileIn').addEventListener('change',e=>{ if(e.target.files[0]) importFile(e.target.files[0]); });
+
+/* ============================ go ============================ */
+syncDateUI();
+buildValidation();
+loadStreets();
+</script>
+</body>
+</html>

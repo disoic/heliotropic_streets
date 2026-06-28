@@ -59,6 +59,13 @@
   .presets button{flex:1;border:1px solid var(--line);border-radius:8px;background:#fff;padding:6px 4px;font:inherit;font-size:11px;color:var(--mut);cursor:pointer}
   .presets button:hover{background:#faf7f1}
   .presets button.on{background:#fbf3ec;color:var(--accent);border-color:#ecd9c8;font-weight:600}
+  .suntimes{display:flex;gap:14px;margin-top:10px;font-size:12px;color:var(--mut);align-items:center}
+  .suntimes b{color:var(--ink);font-family:"IBM Plex Mono",monospace;font-weight:500}
+  .suntimes .sg{display:inline-block;width:8px;height:8px;border-radius:50%;margin-right:6px;vertical-align:middle}
+  .locate-btn{width:34px;height:34px;border:1px solid var(--line);background:#fff;border-radius:8px;cursor:pointer;
+    display:flex;align-items:center;justify-content:center;box-shadow:0 1px 3px rgba(20,18,12,.12);color:#4b4843;font-size:17px;line-height:1}
+  .locate-btn:hover{background:#faf7f1}
+  .locate-btn.on{color:var(--accent);border-color:#ecd9c8}
   .callout{margin-top:12px;font-size:10.8px;line-height:1.5;color:#7a5a36;background:#fdf6ec;border:1px solid #f0e2cf;border-radius:9px;padding:9px 11px}
   .callout b{color:#5e4427}
   .srcbtns{display:flex;gap:6px;margin-top:8px}
@@ -121,6 +128,7 @@
     #panel.min .body{display:none}
     #panel.min .sub{display:none}
     #panel.min .ticks{display:none}
+    #panel.min .suntimes{display:none}
     #panel.min .alwaysOn{padding-top:8px}
   }
   @media (prefers-reduced-motion:reduce){.spin{animation:none}}
@@ -152,6 +160,10 @@
         <button data-d="12-21" class="on">Dec solstice</button>
         <button data-d="03-20">Equinox</button>
         <button data-d="06-21">Jun solstice</button>
+      </div>
+      <div class="suntimes" id="suntimes" title="Local time at the mapped area (your timezone where it applies, otherwise estimated from longitude without daylight-saving)">
+        <span><span class="sg" style="background:#e0892a"></span>Sunrise <b id="stRise">—</b></span>
+        <span><span class="sg" style="background:#9a4fb0"></span>Sunset <b id="stSet">—</b></span>
       </div>
     </div>
   </div>
@@ -325,6 +337,19 @@ function cardinal(az){
   const dirs=["N","NNE","NE","ENE","E","ESE","SE","SSE","S","SSW","SW","WSW","W","WNW","NW","NNW"];
   return dirs[Math.round(((az%360)+360)%360/22.5)%16];
 }
+// Local clock time of sunrise/sunset. If the mapped area is in (roughly) the viewer's timezone
+// — e.g. when using "locate me" — use the device's real, DST-correct local time; otherwise
+// approximate the area's local time from its longitude (no DST).
+function fmtLocalTime(d){
+  if(!d) return "—";
+  const locOffH=Math.round(OBSERVER.lng/15);
+  const devOffH=-d.getTimezoneOffset()/60;
+  if(Math.abs(devOffH-locOffH)<=1.5){
+    return new Intl.DateTimeFormat([],{hour:'2-digit',minute:'2-digit',hour12:false}).format(d);
+  }
+  const x=new Date(d.getTime()+locOffH*3600000);
+  return x.toUTCString().slice(17,22);
+}
 
 /* ============================ map ============================ */
 const map=L.map('map',{preferCanvas:true, zoomControl:true}).setView([CITY.lat,CITY.lng],12);
@@ -337,6 +362,42 @@ L.tileLayer('https://{s}.basemaps.cartocdn.com/light_only_labels/{z}/{x}/{y}{r}.
 
 const canvasRenderer=L.canvas({padding:.5});
 const alignLayer=L.layerGroup().addTo(map);
+
+/* ============================ locate me ============================ */
+let locMarker=null, locating=false;
+const LocateControl=L.Control.extend({
+  options:{position:'topright'},
+  onAdd:function(){
+    const b=L.DomUtil.create('button','locate-btn');
+    b.id='locateBtn'; b.title='Use my location'; b.setAttribute('aria-label','Use my location');
+    b.innerHTML='&#x29BF;'; // ⦿
+    L.DomEvent.disableClickPropagation(b);
+    L.DomEvent.on(b,'click',e=>{ L.DomEvent.stop(e); doLocate(); });
+    return b;
+  }
+});
+map.addControl(new LocateControl());
+function doLocate(){
+  if(locating) return;
+  if(!navigator.geolocation){ setStatus("Geolocation isn't available in this browser."); return; }
+  locating=true;
+  document.getElementById('locateBtn').classList.add('on');
+  setStatus("Finding your location…");
+  map.locate({setView:true, maxZoom:14, enableHighAccuracy:true, timeout:12000});
+}
+map.on('locationfound',e=>{
+  locating=false;
+  const btn=document.getElementById('locateBtn'); if(btn) btn.classList.remove('on');
+  if(locMarker) map.removeLayer(locMarker);
+  locMarker=L.circleMarker(e.latlng,{radius:6,color:'#1e66f5',weight:2,fillColor:'#3b82f6',fillOpacity:.9,renderer:canvasRenderer}).addTo(map);
+  setStatus("Located you — loading streets…");
+  loadStreets();
+});
+map.on('locationerror',e=>{
+  locating=false;
+  const btn=document.getElementById('locateBtn'); if(btn) btn.classList.remove('on');
+  setStatus("Couldn't get your location ("+(e.message||'permission denied')+"). You can pan the map instead.");
+});
 
 /* ============================ state ============================ */
 let SEGMENTS=[]; // {coords:[[lng,lat],[lng,lat]], orient, length, name, type, group}
@@ -389,6 +450,8 @@ function render(){
   document.getElementById('roSet').textContent  = sa.set!=null ? `${sa.set.toFixed(1)}° ${cardinal(sa.set)}`  : "—";
   document.getElementById('roTargets').textContent = targets.length
       ? targets.map(t=>`${t.toFixed(1)}°`).join(" / ") : "—";
+  document.getElementById('stRise').textContent = fmtLocalTime(sa.riseT);
+  document.getElementById('stSet').textContent  = fmtLocalTime(sa.setT);
   document.getElementById('roCount').textContent =
       (sa.rise==null&&sa.set==null) ? "no sunrise/sunset" : count.toLocaleString();
   drawCompass(sa.rise,sa.set,targets);
@@ -720,6 +783,7 @@ document.getElementById('fileIn').addEventListener('change',e=>{ if(e.target.fil
 
 /* ============================ go ============================ */
 syncDateUI();
+render();        // show compass + sun times immediately for the default view
 loadStreets();
 </script>
 </body>

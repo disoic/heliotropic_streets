@@ -39,6 +39,7 @@
   .sub{font-size:12px;color:var(--mut);margin-top:4px;line-height:1.45}
   #collapse{display:none;position:absolute;right:8px;top:9px;width:32px;height:32px;border:0;background:none;border-radius:8px;color:var(--mut);font-size:19px;line-height:1;cursor:pointer}
   .alwaysOn{padding:10px 16px 12px}
+  .problem{margin:2px 0 10px;padding:8px 10px;border-radius:9px;background:#fdecea;border:1px solid #f5c6c0;color:#8a1c12;font-size:12px;line-height:1.45}
   .body{padding:2px 16px 16px;overflow-y:auto;border-top:1px solid var(--line2);overscroll-behavior:contain}
 
   .row{margin-top:14px}
@@ -157,6 +158,7 @@
   </div>
 
   <div class="alwaysOn">
+    <div class="problem" id="problem" role="alert" hidden></div>
     <div class="row">
       <div class="lbl"><span>Day</span><span class="v mono" id="dateLabel">—</span></div>
       <div class="dateline">
@@ -845,6 +847,11 @@ function initMap(view) {
     customAttribution: ['Streets via <a href="https://overpass-api.de" target="_blank" rel="noopener">Overpass API</a>',
       'Elevation: <a href="https://registry.opendata.aws/terrain-tiles/" target="_blank" rel="noopener">Terrain Tiles</a>'] }), 'bottom-left');
   map.on('load', onStyleLoad);
+  map.on('error', e => {
+    const er = e && e.error, url = (er && er.url) || '';
+    if (!mapReady && /styles\/positron/.test(url)) showProblem(`The map style didn't load (${er.status ? 'HTTP ' + er.status : er.message}). Check the connection and reload.`);
+  });
+  setTimeout(() => { if (!mapReady) showProblem("The map style hasn't loaded after 25 seconds. Check the connection and reload."); }, 25000);
   map.on('moveend', onViewChanged);
   map.on('click', onMapClick);
 }
@@ -1390,6 +1397,7 @@ function onViewChanged() {
   scheduleTerrain();
 }
 function planTiles(force) {
+  if (!map) return;
   $('loadBtn').hidden = true; manualList = null;
   if (!autoLoad) { updateStatus(); return; }
   const z = map.getZoom();
@@ -1711,12 +1719,4 @@ function bindControls() {
     l.querySelector('input').addEventListener('change', e => { S.types[g] = e.target.checked; recompute(); scheduleTerrain(); });
     types.appendChild(l);
   }
-  $('loadBtn').addEventListener('click', () => { if (manualList) enqueue(manualList); manualList = null; $('loadBtn').hidden = true; });
-  $('retryBtn').addEventListener('click', () => { failStreak = 0; paused = false; planTiles(true); });
-  $('resumeBtn').addEventListener('click', () => { autoLoad = true; fileName = null; planTiles(false); });
-  $('fileIn').addEventListener('change', e => { if (e.target.files[0]) importFile(e.target.files[0]); e.target.value = ''; });
-  $('clearCache').addEventListener('click', async () => { await IDB.clear(); setStatus('Saved streets and elevation data cleared from this device.'); });
-  $('collapse').addEventListener('click', e => {
-    e.stopPropagation();
-    const p = $('panel'), min = p.classList.toggle('min');
-    $('c
+  $('loadBtn').addEventListener('click', () => { if (manualList) enqueue(manualList); manualList = null; $('loadBtn').hidd
